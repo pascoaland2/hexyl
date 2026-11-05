@@ -181,6 +181,36 @@ scoop install hexyl
 x env use hexyl
 ```
 
+## Resumo de bytes
+
+With `-R`/`--resumo`, `hexyl` prints a byte summary after the normal output
+(including the bottom border, or the C include output when `-i` is used). The
+summary shows the total number of bytes and, for each byte category used for
+coloring, its count and percentage (one decimal place). Only the bytes actually
+displayed are counted (after `--skip` and `--length`); bytes hidden by squeezing
+are still counted. The summary is printed without colors.
+
+Example:
+
+```
+printf 'AB \x00\xff' | hexyl --resumo
+```
+
+After the usual hex dump, this prints:
+
+```
+
+Resumo:
+Total de bytes: 5
+NULL: 1 (20.0%)
+ASCII imprimível: 2 (40.0%)
+Espaço em branco ASCII: 1 (20.0%)
+Outros ASCII: 0 (0.0%)
+Não-ASCII: 1 (20.0%)
+```
+
+The short form works the same way, e.g. `hexyl -R -n 64 file.bin`.
+
 ## Configuration
 
 `hexyl` colors can be configured via environment variables. The variables used are as follows:

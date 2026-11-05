@@ -100,6 +100,19 @@ _FILE_
     A negative value is valid and calculates an offset relative to the end of
     the file.
 
+**-R**, **\--resumo**
+:   Ao final da saída, imprime um resumo com o total de bytes e a
+    contagem/percentual de cada categoria de byte.
+    After the normal output, prints (without colors) a blank line, the total
+    number of bytes and, for each category (NULL, ASCII printable, ASCII
+    whitespace, other ASCII, non-ASCII), its count and percentage with one
+    decimal place. Only displayed bytes are counted (after **\--skip** and
+    **\--length**); bytes hidden by squeezing are still counted.
+
+    Example:
+
+    :   $ **hexyl \--resumo small.png**
+
 **-h**, **\--help**
 :   Prints help information.
 
@@ -137,6 +150,9 @@ Print and view a given file in the terminal pager:
 
 Print the first 256 bytes of a given special file:
 :   $ **hexyl -n 256 /dev/urandom**
+
+Print a given file followed by a byte category summary:
+:   $ **hexyl -R small.png**
 
 # AUTHORS
 
