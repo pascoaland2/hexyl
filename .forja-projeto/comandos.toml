@@ -2,12 +2,6 @@
 
 [[gates.steps]]
 name = "build"
-cmd = "cargo fetch"
-timeout = 1500
-network = true
-
-[[gates.steps]]
-name = "build-2"
 cmd = "cargo build --all-targets"
 timeout = 1500
 
