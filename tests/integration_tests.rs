@@ -962,3 +962,113 @@ mod colors {
             .stdout(expected);
     }
 }
+
+mod resumo {
+    use super::hexyl;
+    use super::PrettyAssert;
+
+    const INPUT: &[u8] = b"AB \x00\xff";
+
+    const TABLE: &str =
+        "┌────────┬─────────────────────────┬─────────────────────────┬────────┬────────┐\n\
+         │00000000│ 41 42 20 00 ff          ┊                         │AB ⋄×   ┊        │\n\
+         └────────┴─────────────────────────┴─────────────────────────┴────────┴────────┘\n";
+
+    const SUMMARY: &str = "\n\
+         Resumo:\n\
+         Total de bytes: 5\n\
+         NULL: 1 (20.0%)\n\
+         ASCII imprimível: 2 (40.0%)\n\
+         Espaço em branco ASCII: 1 (20.0%)\n\
+         Outros ASCII: 0 (0.0%)\n\
+         Não-ASCII: 1 (20.0%)\n";
+
+    fn stdout_of(cmd: &mut assert_cmd::Command) -> String {
+        String::from_utf8(cmd.assert().success().get_output().stdout.clone()).unwrap()
+    }
+
+    #[test]
+    fn short_flag_appends_summary() {
+        let out = stdout_of(hexyl().arg("-R").arg("--color=never").write_stdin(INPUT));
+        assert!(out.ends_with(SUMMARY), "output: {out}");
+        pretty_assertions::assert_eq!(out, format!("{TABLE}{SUMMARY}"));
+    }
+
+    #[test]
+    fn long_flag_matches_short_flag() {
+        let short = stdout_of(hexyl().arg("-R").arg("--color=never").write_stdin(INPUT));
+        let long = stdout_of(
+            hexyl()
+                .arg("--resumo")
+                .arg("--color=never")
+                .write_stdin(INPUT),
+        );
+        pretty_assertions::assert_eq!(short, long);
+    }
+
+    #[test]
+    fn without_flag_output_is_unchanged() {
+        let out = stdout_of(hexyl().arg("--color=never").write_stdin(INPUT));
+        assert!(!out.contains("Resumo:"), "output: {out}");
+        hexyl()
+            .arg("--color=never")
+            .write_stdin(INPUT)
+            .assert()
+            .success()
+            .pretty_stdout(TABLE);
+    }
+
+    #[test]
+    fn empty_input() {
+        let out = stdout_of(hexyl().arg("-R").arg("--color=never").write_stdin(""));
+        assert!(
+            out.ends_with(
+                "\nResumo:\n\
+                 Total de bytes: 0\n\
+                 NULL: 0 (0.0%)\n\
+                 ASCII imprimível: 0 (0.0%)\n\
+                 Espaço em branco ASCII: 0 (0.0%)\n\
+                 Outros ASCII: 0 (0.0%)\n\
+                 Não-ASCII: 0 (0.0%)\n"
+            ),
+            "output: {out}"
+        );
+    }
+
+    #[test]
+    fn length_limits_counted_bytes() {
+        let out = stdout_of(
+            hexyl()
+                .arg("-R")
+                .arg("--color=never")
+                .arg("--length=3")
+                .write_stdin(INPUT),
+        );
+        assert!(
+            out.ends_with(
+                "\nResumo:\n\
+                 Total de bytes: 3\n\
+                 NULL: 0 (0.0%)\n\
+                 ASCII imprimível: 2 (66.7%)\n\
+                 Espaço em branco ASCII: 1 (33.3%)\n\
+                 Outros ASCII: 0 (0.0%)\n\
+                 Não-ASCII: 0 (0.0%)\n"
+            ),
+            "output: {out}"
+        );
+    }
+
+    #[test]
+    fn plain_still_appends_summary() {
+        let out = stdout_of(
+            hexyl()
+                .arg("--plain")
+                .arg("-R")
+                .arg("--color=never")
+                .write_stdin(INPUT),
+        );
+        assert!(out.starts_with("  41 42 20 00 ff"), "output: {out}");
+        assert!(!out.contains('┌'), "output: {out}");
+        assert!(out.ends_with(SUMMARY), "output: {out}");
+    }
+}

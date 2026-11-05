@@ -15,13 +15,86 @@ pub enum Base {
     Hexadecimal,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum ByteCategory {
     Null,
     AsciiPrintable,
     AsciiWhitespace,
     AsciiOther,
     NonAscii,
+}
+
+impl ByteCategory {
+    /// Classify a single byte into its category.
+    pub fn of(byte: u8) -> ByteCategory {
+        if byte == 0x00 {
+            ByteCategory::Null
+        } else if byte.is_ascii_graphic() {
+            ByteCategory::AsciiPrintable
+        } else if byte.is_ascii_whitespace() {
+            ByteCategory::AsciiWhitespace
+        } else if byte.is_ascii() {
+            ByteCategory::AsciiOther
+        } else {
+            ByteCategory::NonAscii
+        }
+    }
+}
+
+/// Counts of bytes per category.
+#[derive(Default, Debug, Clone, Copy, PartialEq)]
+pub struct ByteStats {
+    pub null: u64,
+    pub ascii_printable: u64,
+    pub ascii_whitespace: u64,
+    pub ascii_other: u64,
+    pub non_ascii: u64,
+}
+
+impl ByteStats {
+    /// Count the given bytes.
+    pub fn add(&mut self, bytes: &[u8]) {
+        for &b in bytes {
+            match ByteCategory::of(b) {
+                ByteCategory::Null => self.null += 1,
+                ByteCategory::AsciiPrintable => self.ascii_printable += 1,
+                ByteCategory::AsciiWhitespace => self.ascii_whitespace += 1,
+                ByteCategory::AsciiOther => self.ascii_other += 1,
+                ByteCategory::NonAscii => self.non_ascii += 1,
+            }
+        }
+    }
+
+    /// Total number of counted bytes.
+    pub fn total(&self) -> u64 {
+        self.null + self.ascii_printable + self.ascii_whitespace + self.ascii_other + self.non_ascii
+    }
+
+    /// Write the summary (a blank line followed by 7 lines).
+    pub fn write_summary<W: Write>(&self, w: &mut W) -> io::Result<()> {
+        let total = self.total();
+        let pct = |n: u64| -> f64 {
+            if total == 0 {
+                0.0
+            } else {
+                100.0 * n as f64 / total as f64
+            }
+        };
+        writeln!(w)?;
+        writeln!(w, "Resumo:")?;
+        writeln!(w, "Total de bytes: {}", total)?;
+        let lines = [
+            ("NULL", self.null),
+            ("ASCII imprimível", self.ascii_printable),
+            ("Espaço em branco ASCII", self.ascii_whitespace),
+            ("Outros ASCII", self.ascii_other),
+            ("Não-ASCII", self.non_ascii),
+        ];
+        for (label, n) in lines {
+            writeln!(w, "{}: {} ({:.1}%)", label, n, pct(n))?;
+        }
+        Ok(())
+    }
 }
 
 pub enum IncludeMode {
@@ -93,17 +166,7 @@ struct Byte(u8);
 
 impl Byte {
     fn category(self) -> ByteCategory {
-        if self.0 == 0x00 {
-            ByteCategory::Null
-        } else if self.0.is_ascii_graphic() {
-            ByteCategory::AsciiPrintable
-        } else if self.0.is_ascii_whitespace() {
-            ByteCategory::AsciiWhitespace
-        } else if self.0.is_ascii() {
-            ByteCategory::AsciiOther
-        } else {
-            ByteCategory::NonAscii
-        }
+        ByteCategory::of(self.0)
     }
 
     fn color(self, color_scheme: ColorScheme) -> &'static [u8] {
@@ -918,6 +981,56 @@ mod tests {
 
         let actual_string: &str = str::from_utf8(&output).unwrap();
         assert_eq!(actual_string, expected_string,)
+    }
+
+    #[test]
+    fn byte_category_of() {
+        assert_eq!(ByteCategory::of(0x00), ByteCategory::Null);
+        assert_eq!(ByteCategory::of(b'A'), ByteCategory::AsciiPrintable);
+        assert_eq!(ByteCategory::of(b' '), ByteCategory::AsciiWhitespace);
+        assert_eq!(ByteCategory::of(0x01), ByteCategory::AsciiOther);
+        assert_eq!(ByteCategory::of(0xff), ByteCategory::NonAscii);
+    }
+
+    #[test]
+    fn byte_stats_add_counts_categories() {
+        let mut stats = ByteStats::default();
+        stats.add(b"AB \x00\xff");
+        assert_eq!(
+            stats,
+            ByteStats {
+                null: 1,
+                ascii_printable: 2,
+                ascii_whitespace: 1,
+                ascii_other: 0,
+                non_ascii: 1,
+            }
+        );
+        assert_eq!(stats.total(), 5);
+    }
+
+    #[test]
+    fn byte_stats_write_summary() {
+        let mut stats = ByteStats::default();
+        stats.add(b"AB \x00\xff");
+        let mut out = vec![];
+        stats.write_summary(&mut out).unwrap();
+        assert_eq!(
+            str::from_utf8(&out).unwrap(),
+            "\nResumo:\nTotal de bytes: 5\nNULL: 1 (20.0%)\nASCII imprimível: 2 (40.0%)\nEspaço em branco ASCII: 1 (20.0%)\nOutros ASCII: 0 (0.0%)\nNão-ASCII: 1 (20.0%)\n"
+        );
+    }
+
+    #[test]
+    fn byte_stats_write_summary_empty() {
+        let stats = ByteStats::default();
+        assert_eq!(stats.total(), 0);
+        let mut out = vec![];
+        stats.write_summary(&mut out).unwrap();
+        assert_eq!(
+            str::from_utf8(&out).unwrap(),
+            "\nResumo:\nTotal de bytes: 0\nNULL: 0 (0.0%)\nASCII imprimível: 0 (0.0%)\nEspaço em branco ASCII: 0 (0.0%)\nOutros ASCII: 0 (0.0%)\nNão-ASCII: 0 (0.0%)\n"
+        );
     }
 
     #[test]

@@ -1,0 +1,21 @@
+# Descoberto pelo planejador ao explorar o projeto. Pode editar.
+
+[[gates.steps]]
+name = "build"
+cmd = "cargo build --all-targets"
+timeout = 1500
+
+[[gates.steps]]
+name = "test"
+cmd = "cargo clippy --all-targets"
+timeout = 1500
+
+[[gates.steps]]
+name = "test-2"
+cmd = "cargo test"
+timeout = 1500
+
+[simulate]
+cmd = "./target/debug/hexyl -R tests/examples/ascii"
+kind = "cli"
+url = ""

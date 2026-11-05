@@ -1,0 +1,62 @@
+# Fork personalizado pela Forja (projeto original: sharkdp/hexyl)
+[project]
+name = "hexyl"
+language = "rust"
+bin = "hexyl"
+description = "Versão personalizada de sharkdp/hexyl"
+base_branch = "master"
+integration_branch = "forja/integration"
+target = "linux"
+origin = "fork"
+upstream = "sharkdp/hexyl"
+license = "Apache License 2.0"
+meta_dir = ".forja-projeto"
+
+[agents]
+count = 1
+coder_mode = "opus"      # opus | ladder | free
+max_attempts = 4
+plan_pause_at = 90
+
+[github]
+repo = "pascoaland2/hexyl"
+mode = "pr"              # PR contínuo no SEU fork
+
+[privacy]
+allow_training_providers = true
+
+[gates]
+fmt = "cargo fmt"
+fetch = "cargo fetch"
+max_file_lines = 3000    # só para arquivos NOVOS (arquivos que já existiam não são cobrados)
+max_fn_lines = 400
+require_tests = true
+deny_patterns = ['\bdbg!\s*\(']
+allowed_crates = []
+protected_paths = [".git", ".forja", "forja.toml", ".forja-projeto", ".github"]
+
+[[gates.steps]]
+name = "build"
+cmd = "cargo build --all-targets"
+timeout = 1500
+
+[[gates.steps]]
+name = "clippy"
+cmd = "cargo clippy --all-targets"
+timeout = 1500
+
+[[gates.steps]]
+name = "test"
+cmd = "cargo test"
+timeout = 1500
+
+[oracle]
+enabled = false
+cases_dir = ".forja-projeto/oracle/cases"
+golden_dir = ".forja-projeto/oracle/golden"
+
+[cleanroom]
+forbidden_terms = []
+
+[improve]
+scout_when_idle = false

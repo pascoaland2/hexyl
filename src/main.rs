@@ -1,7 +1,9 @@
+use std::cell::RefCell;
 use std::fs::File;
 use std::io::{self, prelude::*, BufWriter, SeekFrom};
 use std::num::{NonZeroI64, NonZeroU64};
 use std::path::PathBuf;
+use std::rc::Rc;
 
 use clap::builder::styling::{AnsiColor, Effects};
 use clap::builder::ArgPredicate;
@@ -18,7 +20,8 @@ use thiserror::Error as ThisError;
 use terminal_size::terminal_size;
 
 use hexyl::{
-    Base, BorderStyle, CharacterTable, ColorScheme, Endianness, IncludeMode, Input, PrinterBuilder,
+    Base, BorderStyle, ByteStats, CharacterTable, ColorScheme, Endianness, IncludeMode, Input,
+    PrinterBuilder,
 };
 
 use hexyl::{
@@ -214,6 +217,10 @@ struct Opt {
     )]
     include_mode: bool,
 
+    /// Ao final da saída, imprime um resumo com o total de bytes e a contagem/percentual de cada categoria de byte.
+    #[arg(short('R'), long("resumo"))]
+    resumo: bool,
+
     /// Show shell completion for a certain shell
     #[arg(long, value_name("SHELL"))]
     completion: Option<Shell>,
@@ -263,6 +270,20 @@ impl From<GroupSize> for u8 {
             GroupSize::Four => 4,
             GroupSize::Eight => 8,
         }
+    }
+}
+
+/// A reader wrapper that counts the categories of all bytes read through it.
+struct CountingReader<R: Read> {
+    inner: R,
+    stats: Rc<RefCell<ByteStats>>,
+}
+
+impl<R: Read> Read for CountingReader<R> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        let n = self.inner.read(buf)?;
+        self.stats.borrow_mut().add(&buf[..n]);
+        Ok(n)
     }
 }
 
@@ -356,7 +377,7 @@ fn run() -> Result<()> {
             .into())
     };
 
-    let mut reader = if let Some(ref length) = opt.length {
+    let reader = if let Some(ref length) = opt.length {
         let length = parse_byte_count(length).context(anyhow!(
             "failed to parse `--length` arg {:?} as byte count",
             length
@@ -364,6 +385,16 @@ fn run() -> Result<()> {
         Box::new(reader.take(length))
     } else {
         reader.into_inner()
+    };
+
+    let stats = Rc::new(RefCell::new(ByteStats::default()));
+    let mut reader: Box<dyn Read> = if opt.resumo {
+        Box::new(CountingReader {
+            inner: reader,
+            stats: Rc::clone(&stats),
+        })
+    } else {
+        reader
     };
 
     let no_color = std::env::var_os("NO_COLOR").is_some();
@@ -514,6 +545,15 @@ fn run() -> Result<()> {
         .build();
     printer.display_offset(skip_offset + display_offset);
     printer.print_all(&mut reader).map_err(|e| anyhow!(e))?;
+    drop(printer);
+
+    if opt.resumo {
+        stats
+            .borrow()
+            .write_summary(&mut stdout)
+            .map_err(|e| anyhow!(e))?;
+        stdout.flush().map_err(|e| anyhow!(e))?;
+    }
 
     Ok(())
 }
